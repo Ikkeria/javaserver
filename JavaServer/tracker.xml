@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<tracker>
+    <options>
+        <option key="First test">10</option>
+        <option key="Second test">22</option>
+    </options>
+    <peers>
+        <peer superPeer="false" port="2000" lastRegistered="10/12/2001" ip="192.168.1.1"/>
+        <peer superPeer="true" port="3030" lastRegistered="04/10/1991" ip="122.158.10.3"/>
+    </peers>
+    <whitelist>
+        <domain>google.com.</domain>
+        <domain>bold.dk.</domain>
+    </whitelist>
+</tracker>
