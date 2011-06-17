@@ -1,12 +1,14 @@
 package com.diku.simpleserver;
 
 import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
 
 public class Peer {
 	private Boolean super_peer;
 	private int port;
 	private String last_registered;
 	private String ip;
+	private RSAPublicKey rsaPublicKey;
 
 	public void setSuper_peer(Boolean super_peer) {
 		this.super_peer = super_peer;
@@ -35,5 +37,12 @@ public class Peer {
 	@XmlAttribute (name="ip")
 	public String getIp() {
 		return ip;
+	}
+	public void setRsaPublicKey(RSAPublicKey rsaPublicKey) {
+		this.rsaPublicKey = rsaPublicKey;
+	}
+	@XmlElement (name="RSAPublicKey")
+	public RSAPublicKey getRsaPublicKey() {
+		return rsaPublicKey;
 	}
 }
