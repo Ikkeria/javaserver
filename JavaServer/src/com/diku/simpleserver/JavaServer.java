@@ -1,9 +1,11 @@
 package com.diku.simpleserver;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.math.BigInteger;
@@ -11,6 +13,7 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -23,11 +26,13 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.RSAPublicKeySpec;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.TreeMap;
 import java.util.concurrent.Executor;
 
 import javax.crypto.BadPaddingException;
@@ -306,12 +311,14 @@ class ProxyHandler implements HttpHandler {
 			return;
 		}
 		Map<String, List<String>> reqHeaders = xchg.getRequestHeaders();
+		URI uri = xchg.getRequestURI();
 	    InputStream reqBody = xchg.getRequestBody();
+	    Cipher cipher = null;
 		if (encrypt) {
 			String keyString = reqHeaders.get("Session-Key").get(0);
 			byte[] keyBytes = Base64Coder.decode(keyString);
 			try {
-				Cipher cipher = Cipher.getInstance("RSA/ECB/NoPadding");
+				cipher = Cipher.getInstance("RSA/ECB/NoPadding");
 				cipher.init(Cipher.DECRYPT_MODE, privKey);
 				byte[] sessionLock = cipher.doFinal(keyBytes);
 				byte[] sessionKey = new byte[32];
@@ -321,7 +328,6 @@ class ProxyHandler implements HttpHandler {
 				SecretKey secretKey = new SecretKeySpec(sessionKey, "AES");
 				cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
 				cipher.init(Cipher.DECRYPT_MODE, secretKey, new IvParameterSpec(sessionIV));
-//			    InputStream is = xchg.getRequestBody();
 			    int len;
 			    byte[] response = new byte[1024];
 			    ByteArrayOutputStream ba = new ByteArrayOutputStream();
@@ -330,7 +336,29 @@ class ProxyHandler implements HttpHandler {
 			    ba.flush();
 			    reqBody.close();
 				byte[] plaintext = cipher.doFinal(ba.toByteArray());
+				cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+				cipher.init(Cipher.ENCRYPT_MODE, secretKey, new IvParameterSpec(sessionIV));
 				reqBody = new ByteArrayInputStream(plaintext);
+				reqHeaders = new TreeMap<String, List<String>>();
+				BufferedReader br = new BufferedReader(new InputStreamReader(reqBody));
+				String header = br.readLine();
+				String[] splitAction = header.split(" ", 3);
+				if (splitAction.length != 3) {
+					xchg.sendResponseHeaders(400, -1);
+					return;
+				}
+				method = splitAction[0];
+				uri = new URI(splitAction[1]);
+				while ((header = br.readLine())!="") {
+					if (header == null)
+						break;
+					String[] splitHead = header.split(": ", 2);
+					if (splitHead.length != 2)
+						continue;
+					if (reqHeaders.get(splitHead[0]) == null)
+						reqHeaders.put(splitHead[0], new LinkedList<String>());
+					reqHeaders.get(splitHead[0]).add(splitHead[1]);
+				}
 			} catch (NoSuchAlgorithmException e) {
 				e.printStackTrace();
 				xchg.sendResponseHeaders(400, -1);
@@ -355,6 +383,10 @@ class ProxyHandler implements HttpHandler {
 				e.printStackTrace();
 				xchg.sendResponseHeaders(400, -1);
 				return;
+			} catch (URISyntaxException e) {
+				e.printStackTrace();
+				xchg.sendResponseHeaders(400, -1);
+				return;
 			}
 		}
 		List<String> host = reqHeaders.get("Host");
@@ -362,7 +394,6 @@ class ProxyHandler implements HttpHandler {
 			xchg.sendResponseHeaders(400, -1);
 			return;
 		}
-		URI uri = xchg.getRequestURI();
 		String rHost = uri.getHost();
 		if (rHost == null) {
 			xchg.sendResponseHeaders(400, -1);
@@ -390,15 +421,13 @@ class ProxyHandler implements HttpHandler {
 			for (String mfString : mfList)
 				maxForwards = Integer.valueOf(mfString);
 		maxForwards--;
-		maxForwards = -1;
 
 		byte[] post = null;
 		if (method.contentEquals("POST")) {
-		    InputStream is = xchg.getRequestBody();
 		    int len;
 		    byte[] response = new byte[1024];
 		    ByteArrayOutputStream ba = new ByteArrayOutputStream();
-		    while ((len = is.read(response)) != -1)
+		    while ((len = reqBody.read(response)) != -1)
 		    	ba.write(response, 0, len);
 		    ba.flush();
 		    post = ba.toByteArray();
@@ -420,7 +449,8 @@ class ProxyHandler implements HttpHandler {
 		HttpURLConnection conn = (HttpURLConnection)uri.toURL().openConnection(proxy);
 		conn.setRequestMethod(method);
 
-		String via = new String(xchg.getProtocol() + " " + xchg.getLocalAddress().getHostName() + ":" + xchg.getLocalAddress().getPort());		System.out.println("\nRequest Headers:\n");
+		String via = new String(xchg.getProtocol() + " " + xchg.getLocalAddress().getHostName() + ":" + xchg.getLocalAddress().getPort());
+		System.out.println("\nRequest Headers:\n");
 		boolean useVia = false;
 	    for (Entry<String, List<String>> entry : reqHeaders.entrySet()) {
 	    	if (entry.getKey() == null)
@@ -496,11 +526,29 @@ class ProxyHandler implements HttpHandler {
 	    	body.write(response, 0, len);
 	    body.flush();
 	    is.close();
-	    xchg.sendResponseHeaders(conn.getResponseCode(), body.size());
-	    os = xchg.getResponseBody();
-	    body.writeTo(os);
-	    os.close();
+	    if (!encrypt) {
+	    	xchg.sendResponseHeaders(conn.getResponseCode(), body.size());
+	    	os = xchg.getResponseBody();
+	    	body.writeTo(os);
+	    	os.flush();
+	    	os.close();
+		    done = true;
+		    break;
+	    }
 
+		try {
+			byte[] ciphertext = cipher.doFinal(body.toByteArray());
+			xchg.getResponseHeaders().add("Cache-Control", "no-cache");
+			xchg.sendResponseHeaders(700, ciphertext.length);
+	    	os = xchg.getResponseBody();
+	    	os.write(ciphertext);
+	    	os.flush();
+	    	os.close();
+		} catch (IllegalBlockSizeException e) {
+			e.printStackTrace();
+		} catch (BadPaddingException e) {
+			e.printStackTrace();
+		}
 	    done = true;
 	    } catch (IOException e) {
 	    	delPeer(peer);

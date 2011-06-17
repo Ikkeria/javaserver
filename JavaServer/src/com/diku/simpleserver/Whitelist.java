@@ -3,8 +3,6 @@ package com.diku.simpleserver;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.xml.bind.annotation.XmlType;
-
 public class Whitelist {
 	private List<String> domain = new ArrayList<String>();
 
