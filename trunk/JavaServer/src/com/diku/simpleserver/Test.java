@@ -4,13 +4,17 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.security.AlgorithmParameters;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.InvalidParameterSpecException;
-import java.security.spec.KeySpec;
+import java.security.spec.RSAPrivateKeySpec;
+import java.security.spec.RSAPublicKeySpec;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -18,9 +22,7 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -39,8 +41,10 @@ public class Test {
 	 * @throws IllegalBlockSizeException 
 	 * @throws InvalidAlgorithmParameterException 
 	 * @throws NoSuchProviderException 
+	 * @throws InvalidKeySpecException 
 	 */
-	public static void main(String[] args) throws InvalidParameterSpecException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException, InvalidAlgorithmParameterException, NoSuchProviderException {
+	@SuppressWarnings("unused")
+	public static void main(String[] args) throws InvalidParameterSpecException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException, InvalidAlgorithmParameterException, NoSuchProviderException, InvalidKeySpecException {
 		KeyGenerator kgen = KeyGenerator.getInstance("AES");
 		kgen.init(256);
 		SecretKey key = kgen.generateKey();
@@ -62,6 +66,18 @@ public class Test {
 		cipher2.init(Cipher.DECRYPT_MODE, secret, new IvParameterSpec(iv));
 		String plaintext = new String(cipher2.doFinal(ciphertext), "UTF-8");
 		System.out.println(plaintext);
+
+		KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+		kpg.initialize(1024);
+		KeyPair kp = kpg.genKeyPair();
+//		PublicKey publicKey = kp.getPublic();
+//		PrivateKey privateKey = kp.getPrivate();
+		KeyFactory fact = KeyFactory.getInstance("RSA");
+		RSAPublicKeySpec pub = fact.getKeySpec(kp.getPublic(),
+		  RSAPublicKeySpec.class);
+		RSAPrivateKeySpec priv = fact.getKeySpec(kp.getPrivate(),
+		  RSAPrivateKeySpec.class);
+
 		if (true)
 			return;
 		Tracker tracker = new Tracker();
